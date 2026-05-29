@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Editorial Priority Map</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+
+body{
+  font-family:'Georgia',serif;
+  background:#0d0e1a;
+  color:#e8e6df;
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+
+/* ── Header ─────────────────────────────────── */
+header{
+  background:#13142b;
+  border-bottom:1px solid #252747;
+  padding:14px 28px;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  flex-shrink:0;
+}
+header h1{
+  font-size:1rem;
+  font-weight:400;
+  letter-spacing:3px;
+  text-transform:uppercase;
+  color:#c9a96e;
+  flex:1;
+}
+.date-label{font-size:.75rem;color:#666;letter-spacing:1px}
+
+/* ── Add-story bar ───────────────────────────── */
+.add-bar{
+  background:#13142b;
+  border-bottom:1px solid #252747;
+  padding:10px 28px;
+  display:flex;
+  gap:10px;
+  flex-shrink:0;
+}
+.add-bar input{
+  flex:1;
+  padding:9px 14px;
+  background:#0d0e1a;
+  border:1px solid #2e3056;
+  border-radius:6px;
+  color:#e8e6df;
+  font-size:.85rem;
+  outline:none;
+  transition:border-color .2s;
+}
+.add-bar input:focus{border-color:#c9a96e}
+.add-bar input::placeholder{color:#555}
+.add-bar button{
+  padding:9px 22px;
+  background:#c9a96e;
+  border:none;
+  border-radius:6px;
+  color:#0d0e1a;
+  font-weight:700;
+  font-size:.85rem;
+  cursor:pointer;
+  white-space:nowrap;
+  letter-spacing:.5px;
+  transition:background .2s;
+}
+.add-bar button:hover{background:#dfc089}
+.add-bar button:disabled{background:#555;cursor:not-allowed}
+
+/* ── Main layout ─────────────────────────────── */
+.main{
+  display:flex;
+  flex:1;
+  overflow:hidden;
+  gap:0;
+}
+
+/* ── Sidebar (unplaced stories) ──────────────── */
+.sidebar{
+  width:260px;
+  min-width:220px;
+  background:#13142b;
+  border-right:1px solid #252747;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+  flex-shrink:0;
+}
+.sidebar-header{
+  padding:14px 16px 8px;
+  font-size:.65rem;
+  text-transform:uppercase;
+  letter-spacing:2px;
+  color:#666;
+  border-bottom:1px solid #252747;
+  flex-shrink:0;
+}
+.sidebar-list{
+  flex:1;
+  overflow-y:auto;
+  padding:10px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.sidebar-list::-webkit-scrollbar{width:4px}
+.sidebar-list::-webkit-scrollbar-thumb{background:#2e3056;border-radius:2px}
+.sidebar-empty{
+  color:#444;
+  font-size:.8rem;
+  text-align:center;
+  padding:24px 12px;
+  line-height:1.6;
+}
+
+/* ── Story card (sidebar draggable) ─────────── */
+.story-card{
+  background:#1c1e38;
+  border:1px solid #2e3056;
+  border-left:3px solid #c9a96e;
+  border-radius:7px;
+  padding:10px 12px;
+  cursor:grab;
+  user-select:none;
+  transition:border-color .2s, box-shadow .2s;
+}
+.story-card:hover{border-color:#c9a96e;box-shadow:0 2px 12px rgba(201,169,110,.15)}
+.story-card:active{cursor:grabbing}
+.story-card.dragging{opacity:.4}
+.card-emoji{font-size:1.2rem;margin-bottom:4px}
+.card-title{font-size:.78rem;line-height:1.4;color:#e8e6df}
+.card-domain{font-size:.68rem;color:#666;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card-hint{font-size:.65rem;color:#555;margin-top:5px;font-style:italic}
+
+/* ── Chart area ──────────────────────────────── */
+.chart-area{
+  flex:1;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:20px;
+  position:relative;
+  overflow:hidden;
+}
+
+/* ── Chart wrapper (square, responsive) ─────── */
+.chart-wrap{
+  position:relative;
+  /* square that fits the available space */
+  width:min(calc(100vh - 148px), calc(100vw - 300px));
+  aspect-ratio:1/1;
+}
+
+/* ── Out-of-scope backdrop ───────────────────── */
+.zone-oos{
+  position:absolute;
+  inset:0;
+  border-radius:12px;
+  background:#111327;
+  border:2px dashed #252747;
+  overflow:hidden;
+}
+.zone-oos-label{
+  position:absolute;
+  bottom:10px;
+  right:14px;
+  font-size:.6rem;
+  text-transform:uppercase;
+  letter-spacing:2px;
+  color:#333;
+}
+
+/* ── Concentric circles ──────────────────────── */
+.zone{
+  position:absolute;
+  border-radius:50%;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  pointer-events:none; /* drop handled by JS */
+}
+
+.zone-low{
+  width:88%;height:88%;
+  background:radial-gradient(circle,transparent 60%,rgba(39,174,96,.08) 100%);
+  border:2px solid rgba(39,174,96,.35);
+}
+.zone-med{
+  width:64%;height:64%;
+  background:radial-gradient(circle,transparent 55%,rgba(52,152,219,.1) 100%);
+  border:2px solid rgba(52,152,219,.45);
+}
+.zone-high{
+  width:42%;height:42%;
+  background:radial-gradient(circle,transparent 50%,rgba(230,126,34,.12) 100%);
+  border:2px solid rgba(230,126,34,.55);
+}
+.zone-bull{
+  width:22%;height:22%;
+  background:radial-gradient(circle,rgba(231,76,60,.3) 0%,rgba(231,76,60,.08) 100%);
+  border:2px solid rgba(231,76,60,.75);
+}
+
+/* ring labels */
+.ring-label{
+  position:absolute;
+  top:50%;left:50%;
+  pointer-events:none;
+  font-size:.58rem;
+  text-transform:uppercase;
+  letter-spacing:2px;
+  white-space:nowrap;
+  opacity:.55;
+}
+.ring-label.bull{
+  transform:translate(-50%,calc(-50% + 1px));
+  color:#e74c3c;
+}
+.ring-label.high{
+  width:42%;
+  transform:translate(-50%, calc(-50% - 10.5%));
+  text-align:center;
+  color:#e67e22;
+}
+.ring-label.med{
+  width:64%;
+  transform:translate(-50%, calc(-50% - 16%));
+  text-align:center;
+  color:#3498db;
+}
+.ring-label.low{
+  width:88%;
+  transform:translate(-50%, calc(-50% - 22%));
+  text-align:center;
+  color:#27ae60;
+}
+
+/* drag-over highlight */
+.chart-wrap.drag-over .zone-oos{border-color:#c9a96e55}
+
+/* ── Placed emoji tokens ─────────────────────── */
+.story-token{
+  position:absolute;
+  font-size:1.6rem;
+  transform:translate(-50%,-50%);
+  cursor:pointer;
+  z-index:20;
+  user-select:none;
+  transition:transform .15s, filter .15s;
+  filter:drop-shadow(0 1px 4px rgba(0,0,0,.6));
+  line-height:1;
+}
+.story-token:hover{
+  transform:translate(-50%,-50%) scale(1.4);
+  filter:drop-shadow(0 2px 8px rgba(201,169,110,.5));
+  z-index:30;
+}
+.story-token.dragging-token{opacity:.3}
+
+/* ── Tooltip ─────────────────────────────────── */
+.tooltip{
+  position:fixed;
+  background:#1c1e38;
+  border:1px solid #3a3d6a;
+  border-radius:10px;
+  padding:16px;
+  width:300px;
+  z-index:9999;
+  box-shadow:0 8px 40px rgba(0,0,0,.5);
+  pointer-events:auto;
+}
+.tooltip-emoji{font-size:2rem;margin-bottom:6px}
+.tooltip-title{font-size:.88rem;line-height:1.4;color:#e8e6df;margin-bottom:6px}
+.tooltip-url{font-size:.72rem;color:#c9a96e;word-break:break-all;text-decoration:none}
+.tooltip-url:hover{text-decoration:underline}
+.tooltip-badge{
+  display:inline-block;
+  margin-top:6px;
+  padding:2px 9px;
+  border-radius:20px;
+  font-size:.65rem;
+  font-weight:700;
+  letter-spacing:.5px;
+}
+.badge-bullseye{background:rgba(231,76,60,.2);color:#e74c3c;border:1px solid rgba(231,76,60,.4)}
+.badge-high{background:rgba(230,126,34,.2);color:#e67e22;border:1px solid rgba(230,126,34,.4)}
+.badge-medium{background:rgba(52,152,219,.2);color:#3498db;border:1px solid rgba(52,152,219,.4)}
+.badge-low{background:rgba(39,174,96,.2);color:#27ae60;border:1px solid rgba(39,174,96,.4)}
+.badge-out-of-scope{background:rgba(127,140,141,.2);color:#95a5a6;border:1px solid rgba(127,140,141,.4)}
+
+.tt-sep{border:none;border-top:1px solid #252747;margin:10px 0}
+.tt-label{font-size:.65rem;text-transform:uppercase;letter-spacing:1.5px;color:#666;margin-bottom:5px}
+.tt-reason{
+  width:100%;
+  background:#0d0e1a;
+  border:1px solid #2e3056;
+  border-radius:5px;
+  color:#e8e6df;
+  font-size:.78rem;
+  font-family:Georgia,serif;
+  padding:7px 9px;
+  resize:vertical;
+  min-height:58px;
+  outline:none;
+  transition:border-color .2s;
+}
+.tt-reason:focus{border-color:#c9a96e}
+.tt-save{
+  margin-top:5px;
+  padding:4px 12px;
+  background:transparent;
+  border:1px solid #c9a96e44;
+  border-radius:4px;
+  color:#c9a96e;
+  font-size:.72rem;
+  cursor:pointer;
+  transition:border-color .2s;
+}
+.tt-save:hover{border-color:#c9a96e}
+.tt-actions{display:flex;gap:8px;margin-top:10px}
+.tt-btn{
+  flex:1;
+  padding:7px 10px;
+  border-radius:5px;
+  font-size:.72rem;
+  cursor:pointer;
+  transition:background .2s;
+  letter-spacing:.3px;
+}
+.tt-btn-change{
+  background:transparent;
+  border:1px solid #c9a96e;
+  color:#c9a96e;
+}
+.tt-btn-change:hover{background:rgba(201,169,110,.1)}
+.tt-btn-delete{
+  background:transparent;
+  border:1px solid #e74c3c;
+  color:#e74c3c;
+  flex:0;
+  padding:7px 14px;
+}
+.tt-btn-delete:hover{background:rgba(231,76,60,.1)}
+
+/* ── Priority picker modal ───────────────────── */
+.modal-overlay{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.65);
+  z-index:9990;
+  display:flex;align-items:center;justify-content:center;
+}
+.modal{
+  background:#1c1e38;
+  border:1px solid #3a3d6a;
+  border-radius:12px;
+  padding:24px;
+  width:320px;
+  box-shadow:0 12px 48px rgba(0,0,0,.6);
+}
+.modal h2{font-size:.9rem;letter-spacing:1px;text-transform:uppercase;margin-bottom:16px;color:#c9a96e}
+.priority-options{display:flex;flex-direction:column;gap:8px}
+.priority-opt{
+  padding:12px 16px;
+  border-radius:7px;
+  border:1px solid #2e3056;
+  background:#13142b;
+  cursor:pointer;
+  text-align:left;
+  transition:border-color .2s, background .2s;
+  display:flex;align-items:center;gap:10px;
+}
+.priority-opt:hover{background:#252747}
+.priority-opt .opt-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.priority-opt .opt-name{font-size:.82rem;color:#e8e6df}
+.priority-opt .opt-desc{font-size:.68rem;color:#666;margin-top:1px}
+.modal-cancel{
+  margin-top:14px;
+  width:100%;
+  padding:8px;
+  background:transparent;
+  border:1px solid #2e3056;
+  border-radius:6px;
+  color:#666;
+  font-size:.78rem;
+  cursor:pointer;
+}
+.modal-cancel:hover{border-color:#666;color:#999}
+
+/* ── Toast ───────────────────────────────────── */
+.toast{
+  position:fixed;
+  bottom:24px;right:28px;
+  background:#1c1e38;
+  border:1px solid #3a3d6a;
+  border-radius:8px;
+  padding:10px 18px;
+  font-size:.8rem;
+  color:#e8e6df;
+  z-index:99999;
+  box-shadow:0 4px 20px rgba(0,0,0,.4);
+  animation:fadeUp .25s ease;
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+/* ── Responsive tweaks ───────────────────────── */
+@media(max-width:700px){
+  .sidebar{display:none}
+  .chart-wrap{
+    width:min(calc(100vh - 148px), 95vw);
+  }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Editorial Priority Map</h1>
+  <span class="date-label" id="dateLbl"></span>
+</header>
+
+<div class="add-bar">
+  <input type="url" id="urlInput" placeholder="Paste article URL and click Add story…" autocomplete="off">
+  <button id="addBtn" onclick="addStory()">Add story</button>
+</div>
+
+<div class="main">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-header">Unplaced stories — drag onto chart</div>
+    <div class="sidebar-list" id="sidebarList">
+      <div class="sidebar-empty" id="sidebarEmpty">No stories yet.<br>Paste a URL above to begin.</div>
+    </div>
+  </aside>
+
+  <!-- Chart -->
+  <div class="chart-area">
+    <div class="chart-wrap" id="chartWrap">
+      <!-- Out-of-scope backdrop -->
+      <div class="zone-oos" id="zoneOos">
+        <span class="zone-oos-label">Outside editorial scope</span>
+      </div>
+
+      <!-- Rings (rendered back-to-front so smaller ones are on top visually) -->
+      <div class="zone zone-low"></div>
+      <div class="zone zone-med"></div>
+      <div class="zone zone-high"></div>
+      <div class="zone zone-bull"></div>
+
+      <!-- Ring labels -->
+      <span class="ring-label bull">Bullseye</span>
+      <span class="ring-label high">High priority</span>
+      <span class="ring-label med">Medium priority</span>
+      <span class="ring-label low">Low priority</span>
+    </div>
+  </div>
+</div>
+
+<!-- Tooltip (singleton) -->
+<div class="tooltip" id="tooltip" style="display:none">
+  <div class="tooltip-emoji" id="ttEmoji"></div>
+  <div class="tooltip-title" id="ttTitle"></div>
+  <a class="tooltip-url" id="ttUrl" href="#" target="_blank" rel="noopener"></a>
+  <span class="tooltip-badge" id="ttBadge"></span>
+  <hr class="tt-sep">
+  <div class="tt-label">Why this priority?</div>
+  <textarea class="tt-reason" id="ttReason" placeholder="Add editorial rationale…" rows="3"></textarea>
+  <button class="tt-save" onclick="saveReason()">Save note</button>
+  <hr class="tt-sep">
+  <div class="tt-actions">
+    <button class="tt-btn tt-btn-change" onclick="openPriorityModal()">Change priority</button>
+    <button class="tt-btn tt-btn-delete" onclick="deleteStory()">Delete</button>
+  </div>
+</div>
+
+<!-- Priority picker modal -->
+<div class="modal-overlay" id="modalOverlay" style="display:none" onclick="closeModal(event)">
+  <div class="modal">
+    <h2>Move to priority level</h2>
+    <div class="priority-options">
+      <button class="priority-opt" onclick="changePriority('bullseye')">
+        <span class="opt-dot" style="background:#e74c3c"></span>
+        <div><div class="opt-name">Bullseye</div><div class="opt-desc">Highest priority — lead stories</div></div>
+      </button>
+      <button class="priority-opt" onclick="changePriority('high')">
+        <span class="opt-dot" style="background:#e67e22"></span>
+        <div><div class="opt-name">High priority</div><div class="opt-desc">Important, needs prominent coverage</div></div>
+      </button>
+      <button class="priority-opt" onclick="changePriority('medium')">
+        <span class="opt-dot" style="background:#3498db"></span>
+        <div><div class="opt-name">Medium priority</div><div class="opt-desc">Worth covering, standard treatment</div></div>
+      </button>
+      <button class="priority-opt" onclick="changePriority('low')">
+        <span class="opt-dot" style="background:#27ae60"></span>
+        <div><div class="opt-name">Low priority</div><div class="opt-desc">Cover if resources allow</div></div>
+      </button>
+      <button class="priority-opt" onclick="changePriority('out-of-scope')">
+        <span class="opt-dot" style="background:#95a5a6"></span>
+        <div><div class="opt-name">Outside scope</div><div class="opt-desc">Not within editorial mission</div></div>
+      </button>
+    </div>
+    <button class="modal-cancel" onclick="document.getElementById('modalOverlay').style.display='none'">Cancel</button>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   State
+═══════════════════════════════════════════════════════ */
+let stories = JSON.parse(localStorage.getItem('edscope_stories') || '[]');
+let activeTokenId = null;   // story shown in tooltip
+let tooltipHideTimer = null;
+
+/* ═══════════════════════════════════════════════════════
+   Persistence
+═══════════════════════════════════════════════════════ */
+function save() {
+  localStorage.setItem('edscope_stories', JSON.stringify(stories));
+}
+
+/* ═══════════════════════════════════════════════════════
+   Emoji assignment
+═══════════════════════════════════════════════════════ */
+const TOPIC_MAP = [
+  [['politi','congress','senate','president','elect','democrat','republican','white house','parliament','government','vote'], '🏛️'],
+  [['war','militar','conflict','army','navy','weapon','missile','soldier','troop','nato','ukraine','russia','israel','gaza','bomb'], '⚔️'],
+  [['climate','environment','carbon','emission','global warm','wildfire','flood','drought','sustainab','recycl','ocean','species'], '🌍'],
+  [['tech','ai','artificial intel','software','startup','silicon','crypto','bitcoin','cyber','hack','data','algorithm','robot','openai','google','apple','microsoft','meta','amazon'], '💻'],
+  [['health','covid','vaccine','cancer','hospital','doctor','patient','drug','medicine','disease','mental health','fda','cdc'], '🏥'],
+  [['econom','market','stock','inflation','fed','interest rate','gdp','recession','bank','invest','wall street','finance','trade'], '📈'],
+  [['sport','football','basketball','baseball','soccer','tennis','nfl','nba','mlb','olympic','champion','athlete','league'], '⚽'],
+  [['music','film','movie','celebrity','oscar','grammy','entertain','hollywood','tv show','series','album','tour','concert'], '🎬'],
+  [['scienc','space','nasa','climate','research','study','discover','planet','asteroid','gene','dna','physics','biology'], '🔬'],
+  [['educa','school','college','university','student','teacher','tuition','campus','degree'], '📚'],
+  [['crime','police','murder','arrest','trial','court','prison','shoot','gun','violence','fbi','drug'], '🚨'],
+  [['immigrat','border','migrant','asylum','visa','citizenship','deport'], '🛂'],
+  [['food','restaur','chef','cuisin','recipe','diet','nutrition','hunger'], '🍽️'],
+  [['travel','tour','airline','flight','hotel','vacation','destination'], '✈️'],
+  [['art','museum','exhibit','paint','sculpt','design','fashion'], '🎨'],
+  [['real estate','housing','mortgage','rent','property','home'], '🏠'],
+  [['energy','oil','gas','solar','wind','nuclear','power'], '⚡'],
+];
+
+function getEmoji(title, url) {
+  const text = (title + ' ' + url).toLowerCase();
+  for (const [keywords, emoji] of TOPIC_MAP) {
+    if (keywords.some(k => text.includes(k))) return emoji;
+  }
+  return '📰';
+}
+
+/* ═══════════════════════════════════════════════════════
+   Title fetching (best-effort via allorigins proxy)
+═══════════════════════════════════════════════════════ */
+function extractDomain(url) {
+  try { return new URL(url).hostname.replace('www.', ''); }
+  catch { return url; }
+}
+
+function slugTitle(url) {
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.split('/').filter(Boolean);
+    const slug = parts[parts.length - 1] || parts[parts.length - 2] || u.hostname;
+    return slug.replace(/[-_]/g, ' ').replace(/\.\w+$/, '');
+  } catch { return url; }
+}
+
+async function fetchTitle(url) {
+  try {
+    const proxy = 'https://api.allorigins.win/get?url=' + encodeURIComponent(url);
+    const res = await fetch(proxy, { signal: AbortSignal.timeout(8000) });
+    const json = await res.json();
+    const match = json.contents && json.contents.match(/<title[^>]*>([^<]{1,200})<\/title>/i);
+    if (match) return match[1].trim();
+  } catch {}
+  return null;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Add story
+═══════════════════════════════════════════════════════ */
+async function addStory() {
+  const input = document.getElementById('urlInput');
+  const btn   = document.getElementById('addBtn');
+  let url = input.value.trim();
+  if (!url) return;
+  if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
+
+  btn.disabled = true;
+  btn.textContent = 'Fetching…';
+
+  const placeholderTitle = slugTitle(url);
+  const id = 'story_' + Date.now();
+  const story = {
+    id,
+    url,
+    title: placeholderTitle,
+    emoji: getEmoji(placeholderTitle, url),
+    zone: 'unplaced',
+    x: null, y: null,
+    reason: '',
+    addedAt: Date.now(),
+  };
+  stories.push(story);
+  save();
+  renderSidebar();
+
+  input.value = '';
+  btn.disabled = false;
+  btn.textContent = 'Add story';
+
+  // Try to get real title async
+  const realTitle = await fetchTitle(url);
+  if (realTitle) {
+    story.title = realTitle;
+    story.emoji = getEmoji(realTitle, url);
+    save();
+    renderSidebar();
+    renderTokens();
+  }
+}
+
+document.getElementById('urlInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter') addStory();
+});
+
+/* ═══════════════════════════════════════════════════════
+   Sidebar render
+═══════════════════════════════════════════════════════ */
+function renderSidebar() {
+  const list  = document.getElementById('sidebarList');
+  const empty = document.getElementById('sidebarEmpty');
+  const unplaced = stories.filter(s => s.zone === 'unplaced');
+
+  empty.style.display = unplaced.length ? 'none' : 'block';
+
+  // Remove old cards
+  list.querySelectorAll('.story-card').forEach(el => el.remove());
+
+  unplaced.forEach(story => {
+    const card = document.createElement('div');
+    card.className = 'story-card';
+    card.draggable = true;
+    card.dataset.id = story.id;
+    card.innerHTML = `
+      <div class="card-emoji">${story.emoji}</div>
+      <div class="card-title">${escHtml(story.title)}</div>
+      <div class="card-domain">${extractDomain(story.url)}</div>
+      <div class="card-hint">Drag onto the chart to place</div>
+    `;
+    card.addEventListener('dragstart', onCardDragStart);
+    list.appendChild(card);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   Drag from sidebar → chart
+═══════════════════════════════════════════════════════ */
+let dragStoryId = null;
+
+function onCardDragStart(e) {
+  dragStoryId = e.currentTarget.dataset.id;
+  e.currentTarget.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+document.querySelectorAll('.story-card').forEach(c => {
+  c.addEventListener('dragend', () => c.classList.remove('dragging'));
+});
+
+const chartWrap = document.getElementById('chartWrap');
+
+chartWrap.addEventListener('dragover', e => {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  chartWrap.classList.add('drag-over');
+});
+chartWrap.addEventListener('dragleave', () => chartWrap.classList.remove('drag-over'));
+
+chartWrap.addEventListener('drop', e => {
+  e.preventDefault();
+  chartWrap.classList.remove('drag-over');
+
+  if (!dragStoryId) return;
+  const story = stories.find(s => s.id === dragStoryId);
+  if (!story) return;
+
+  const rect = chartWrap.getBoundingClientRect();
+  const px = ((e.clientX - rect.left) / rect.width)  * 100;
+  const py = ((e.clientY - rect.top)  / rect.height) * 100;
+
+  story.x    = px;
+  story.y    = py;
+  story.zone = detectZone(px, py);
+  save();
+  renderSidebar();
+  renderTokens();
+  dragStoryId = null;
+  showToast(`"${story.title.slice(0,40)}…" placed as ${zoneName(story.zone)}`);
+});
+
+/* ═══════════════════════════════════════════════════════
+   Zone detection  (distance from 50,50 in % units)
+═══════════════════════════════════════════════════════ */
+function detectZone(px, py) {
+  const dx = px - 50, dy = py - 50;
+  const dist = Math.sqrt(dx*dx + dy*dy); // 0–~70
+  if (dist <= 11)  return 'bullseye';
+  if (dist <= 21)  return 'high';
+  if (dist <= 32)  return 'medium';
+  if (dist <= 44)  return 'low';
+  return 'out-of-scope';
+}
+
+function zoneName(z) {
+  return {bullseye:'Bullseye',high:'High priority',medium:'Medium priority',low:'Low priority','out-of-scope':'Outside scope'}[z] || z;
+}
+function zoneBadgeClass(z) {
+  return {bullseye:'badge-bullseye',high:'badge-high',medium:'badge-medium',low:'badge-low','out-of-scope':'badge-out-of-scope'}[z] || '';
+}
+
+/* ═══════════════════════════════════════════════════════
+   Token render (placed stories as emoji on chart)
+═══════════════════════════════════════════════════════ */
+function renderTokens() {
+  chartWrap.querySelectorAll('.story-token').forEach(el => el.remove());
+
+  stories.filter(s => s.zone !== 'unplaced').forEach(story => {
+    const el = document.createElement('div');
+    el.className = 'story-token';
+    el.textContent = story.emoji;
+    el.dataset.id = story.id;
+    el.style.left = story.x + '%';
+    el.style.top  = story.y + '%';
+    el.title = story.title;
+
+    el.addEventListener('mouseenter', () => showTooltip(story.id, el));
+    el.addEventListener('mouseleave', scheduleHideTooltip);
+
+    // Make placed tokens draggable to re-position
+    el.draggable = true;
+    el.addEventListener('dragstart', e => {
+      dragStoryId = story.id;
+      el.classList.add('dragging-token');
+      e.dataTransfer.effectAllowed = 'move';
+      hideTooltip();
+    });
+    el.addEventListener('dragend', () => el.classList.remove('dragging-token'));
+
+    chartWrap.appendChild(el);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   Tooltip
+═══════════════════════════════════════════════════════ */
+const tooltip = document.getElementById('tooltip');
+
+tooltip.addEventListener('mouseenter', () => clearTimeout(tooltipHideTimer));
+tooltip.addEventListener('mouseleave', scheduleHideTooltip);
+
+function showTooltip(id, anchorEl) {
+  clearTimeout(tooltipHideTimer);
+  const story = stories.find(s => s.id === id);
+  if (!story) return;
+  activeTokenId = id;
+
+  document.getElementById('ttEmoji').textContent  = story.emoji;
+  document.getElementById('ttTitle').textContent  = story.title;
+  const urlEl = document.getElementById('ttUrl');
+  urlEl.href = story.url;
+  urlEl.textContent = story.url;
+  document.getElementById('ttReason').value = story.reason || '';
+
+  const badge = document.getElementById('ttBadge');
+  badge.textContent  = zoneName(story.zone);
+  badge.className    = 'tooltip-badge ' + zoneBadgeClass(story.zone);
+
+  tooltip.style.display = 'block';
+  positionTooltip(anchorEl);
+}
+
+function positionTooltip(anchorEl) {
+  const r = anchorEl.getBoundingClientRect();
+  const tw = 300, th = 280;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  let left = r.right + 12;
+  let top  = r.top - 20;
+  if (left + tw > vw - 8) left = r.left - tw - 12;
+  if (top  + th > vh - 8) top  = vh - th - 8;
+  if (top < 8) top = 8;
+  tooltip.style.left = left + 'px';
+  tooltip.style.top  = top  + 'px';
+}
+
+function scheduleHideTooltip() {
+  tooltipHideTimer = setTimeout(hideTooltip, 280);
+}
+function hideTooltip() {
+  tooltip.style.display = 'none';
+  activeTokenId = null;
+}
+
+/* ═══════════════════════════════════════════════════════
+   Tooltip actions
+═══════════════════════════════════════════════════════ */
+function saveReason() {
+  if (!activeTokenId) return;
+  const story = stories.find(s => s.id === activeTokenId);
+  if (!story) return;
+  story.reason = document.getElementById('ttReason').value;
+  save();
+  showToast('Note saved');
+}
+
+function openPriorityModal() {
+  document.getElementById('modalOverlay').style.display = 'flex';
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modalOverlay')) {
+    document.getElementById('modalOverlay').style.display = 'none';
+  }
+}
+
+function changePriority(newZone) {
+  document.getElementById('modalOverlay').style.display = 'none';
+  if (!activeTokenId) return;
+  const story = stories.find(s => s.id === activeTokenId);
+  if (!story) return;
+
+  if (newZone === 'unplaced') {
+    story.zone = 'unplaced';
+    story.x = null; story.y = null;
+  } else {
+    // Snap to center of new zone
+    const centers = {
+      bullseye:     [50, 50],
+      high:         [50, 35],
+      medium:       [50, 26],
+      low:          [50, 18],
+      'out-of-scope':[90, 90],
+    };
+    const [cx, cy] = centers[newZone] || [50,50];
+    // Place with a small random offset to avoid stacking
+    story.x    = cx + (Math.random()-0.5)*8;
+    story.y    = cy + (Math.random()-0.5)*8;
+    story.zone = newZone;
+  }
+  save();
+  hideTooltip();
+  renderSidebar();
+  renderTokens();
+  showToast('Moved to ' + zoneName(newZone));
+}
+
+function deleteStory() {
+  if (!activeTokenId) return;
+  const idx = stories.findIndex(s => s.id === activeTokenId);
+  if (idx === -1) return;
+  const title = stories[idx].title.slice(0,40);
+  stories.splice(idx, 1);
+  save();
+  hideTooltip();
+  renderSidebar();
+  renderTokens();
+  showToast(`"${title}…" deleted`);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Toast
+═══════════════════════════════════════════════════════ */
+let toastTimer;
+function showToast(msg) {
+  clearTimeout(toastTimer);
+  let t = document.querySelector('.toast');
+  if (!t) { t = document.createElement('div'); t.className = 'toast'; document.body.appendChild(t); }
+  t.textContent = msg;
+  t.style.display = 'block';
+  t.style.animation = 'none';
+  t.offsetHeight; // reflow
+  t.style.animation = 'fadeUp .25s ease';
+  toastTimer = setTimeout(() => { if(t) t.style.display='none'; }, 2200);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Utilities
+═══════════════════════════════════════════════════════ */
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ═══════════════════════════════════════════════════════
+   Date label
+═══════════════════════════════════════════════════════ */
+document.getElementById('dateLbl').textContent = new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+/* ═══════════════════════════════════════════════════════
+   Init
+═══════════════════════════════════════════════════════ */
+renderSidebar();
+renderTokens();
+</script>
+</body>
+</html>
