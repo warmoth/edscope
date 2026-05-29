@@ -60,6 +60,20 @@ header h1{
   flex:1;
 }
 .date-label{font-size:.72rem;font-weight:400;color:var(--text-dim);letter-spacing:.5px}
+.btn-reset{
+  padding:6px 14px;
+  background:transparent;
+  border:1px solid rgba(244,63,94,.35);
+  border-radius:7px;
+  color:var(--bull);
+  font-family:'Inter',system-ui,sans-serif;
+  font-size:.72rem;
+  font-weight:500;
+  cursor:pointer;
+  letter-spacing:.3px;
+  transition:border-color .18s, background .18s;
+}
+.btn-reset:hover{border-color:var(--bull);background:rgba(244,63,94,.08)}
 
 /* ── Add-story bar ───────────────────────────── */
 .add-bar{
@@ -487,6 +501,7 @@ header h1{
 <header>
   <h1>Editorial Priority Map</h1>
   <span class="date-label" id="dateLbl"></span>
+  <button class="btn-reset" onclick="resetAll()">Reset</button>
 </header>
 
 <div class="add-bar">
@@ -936,6 +951,19 @@ function deleteStory() {
   renderSidebar();
   renderTokens();
   showToast(`"${title}…" deleted`);
+}
+
+/* ═══════════════════════════════════════════════════════
+   Reset
+═══════════════════════════════════════════════════════ */
+function resetAll() {
+  if (!confirm('Clear all stories and reset the board?')) return;
+  stories = [];
+  save();
+  hideTooltip();
+  renderSidebar();
+  renderTokens();
+  showToast('Board reset');
 }
 
 /* ═══════════════════════════════════════════════════════
